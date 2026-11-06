@@ -96,32 +96,27 @@ def export(root, path):
         return
     lent = _lend_meshes()
     try:
-        if urdf.articulated(root):
-            coll = bpy.data.collections.new("s3d~export")
-            bpy.context.scene.collection.children.link(coll)
-            try:
-                state = urdf.glb_tree(root, coll)
-            except BaseException:
-                bpy.data.collections.remove(coll)
-                raise
-            dressed = materials.dressed()           # asked before the tags come off: it reads them
-            tags = {m: m.pop(materials.TAG) for m in bpy.data.materials if materials.TAG in m}   # extras: joints only
-            try:
-                bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", collection=coll.name,
-                                          export_extras=True,
-                                          export_materials="EXPORT" if dressed else "NONE")
-            finally:
-                for m, tag in tags.items():
-                    m[materials.TAG] = tag
-                urdf.undo(state, coll)
-            return
-        scale = tuple(root.scale)
-        root.scale = (_core.MM / 1000,) * 3
+        name = root.name                                   # the GLB's scene: the exporter names it after coll
+        coll = bpy.data.collections.new("s3d~export")      # the exporter writes this, not the whole scene
+        bpy.context.scene.collection.children.link(coll)
+        state = urdf.glb_tree(root, coll)
+        dressed = materials.dressed()           # asked before the tags come off: it reads them
+        tags = {m: m.pop(materials.TAG) for m in bpy.data.materials if materials.TAG in m}   # extras: joints only
+        clash = bpy.data.collections.get(name)  # a collection of the program's, lent its name meanwhile
         try:
-            bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB",
-                                      export_materials="EXPORT" if materials.dressed() else "NONE")
+            if clash is not None:
+                clash.name = "s3d~export~lent"
+            coll.name = name
+            bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", collection=coll.name,
+                                      export_extras=True,
+                                      export_materials="EXPORT" if dressed else "NONE")
         finally:
-            root.scale = scale                 # the program's model stays in its unit
+            coll.name = "s3d~export"
+            if clash is not None:
+                clash.name = name
+            for m, tag in tags.items():
+                m[materials.TAG] = tag
+            urdf.undo(state, coll)
     finally:
         _return_meshes(lent)
 
