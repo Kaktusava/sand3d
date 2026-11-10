@@ -305,14 +305,12 @@ def _boolean(ob, tools, operation, strip, self_intersect=False, verb="boolean", 
         for tool in consumed:
             delete(tool)
         raise ValueError(f"{verb}: the tools take all of {name!r} away — nothing would be left")
+    empty_intersection = None
     if operation == "INTERSECT" and not bm.faces:
-        bm.free()
         names = ", ".join(repr(_core.given_name(t)) for t in tools)
         part, tools_at = _boxes(ob, operands)
-        for tool in consumed:
-            delete(tool)
-        raise ValueError(f"{verb}: {name!r} and {names} share nothing — they miss each other, or only touch "
-                         f"(their boxes {part}; {tools_at})")
+        empty_intersection = (f"{verb}: {name!r} and {names} share nothing — they miss each other, or only touch "
+                              f"(their boxes {part}; {tools_at}); returning an empty mesh")
     if operation == "DIFFERENCE":
         # a tool that leaves no face took no volume out: it only touched, and printed its
         # footprint on the face it stands on, in slivers a later bevel clamps to nothing
@@ -369,6 +367,8 @@ def _boolean(ob, tools, operation, strip, self_intersect=False, verb="boolean", 
         del ob[MERGED]
     for tool in consumed:
         delete(tool)
+    if empty_intersection is not None:
+        warnings.warn(empty_intersection, stacklevel=4)
     return ob
 
 
@@ -450,8 +450,8 @@ def _materials_lost(ob, others):
 def intersect(ob, tool):
     """Keep the common part.
 
-    What `ob` and `tool` share. Raises if the intersection is empty, leaving `ob`
-    unchanged. The tool is used up even when they share nothing."""
+    What `ob` and `tool` share. If they share nothing, `ob` becomes an empty mesh
+    and a warning identifies both objects. The tool is used up."""
     _solids("intersect", ob, tool)
     refuse_using_up([tool], "intersect")
     _guard.using_up([tool], ob)
